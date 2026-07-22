@@ -1,0 +1,46 @@
+services:
+  api:
+    build: .
+    container_name: mcdr-api
+    ports:
+      - "3000:3000"
+    environment:
+      - MONGODB_URI=mongodb://mongo:27017/mcdr
+      - KEYCLOAK_URL=http://keycloak:8080
+      - KEYCLOAK_REALM=mcdr
+      - KEYCLOAK_CLIENT_ID=mcdr-api
+      - KEYCLOAK_CLIENT_SECRET=CHANGE_ME
+      - FILE_STORAGE_PATH=/app/uploads
+      - MAX_UPLOAD_SIZE_MB=10
+      - PAGINATION_DEFAULT_LIMIT=20
+      - CORS_ORIGINS=http://localhost:5173,http://localhost:5174
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      - mongo
+      - keycloak
+
+  mongo:
+    image: mongo:7
+    container_name: mcdr-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    container_name: mcdr-keycloak
+    command: start-dev --import-realm
+    environment:
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin
+      - KC_HOSTNAME_URL=http://localhost:8080
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./keycloak:/opt/keycloak/data/import
+
+volumes:
+  mongo-data:
+  uploads:
