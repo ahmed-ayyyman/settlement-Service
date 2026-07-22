@@ -1,4 +1,4 @@
-import { IsEnum, IsOptional, IsInt, Min, Max, MinLength } from 'class-validator';
+import { IsEnum, IsOptional, IsInt, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 import { SettlementStatus } from '../schemas/settlement-request.schema';
 

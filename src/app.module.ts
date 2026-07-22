@@ -16,7 +16,10 @@ import { HealthController } from './health/health.controller';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        uri: config.get<string>('MONGODB_URI', 'mongodb://localhost:27017/mcdr'),
+        uri: config.get<string>(
+          'MONGODB_URI',
+          'mongodb://localhost:27017/mcdr',
+        ),
       }),
     }),
     AuthModule,

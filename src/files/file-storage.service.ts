@@ -17,7 +17,10 @@ export class FileStorageService {
     this.basePath = configService.get<string>('FILE_STORAGE_PATH', './uploads');
   }
 
-  async store(file: Express.Multer.File, subfolder: string): Promise<StoredFile> {
+  async store(
+    file: Express.Multer.File,
+    subfolder: string,
+  ): Promise<StoredFile> {
     const dir = path.join(this.basePath, subfolder);
     await fs.mkdir(dir, { recursive: true });
     const key = `${randomUUID()}-${file.originalname}`;
@@ -26,10 +29,14 @@ export class FileStorageService {
     return { key: path.join(subfolder, key), originalName: file.originalname };
   }
 
-  async read(storageKey: string): Promise<{ buffer: Buffer; originalName: string }> {
+  async read(
+    storageKey: string,
+  ): Promise<{ buffer: Buffer; originalName: string }> {
     const filePath = path.join(this.basePath, storageKey);
     const buffer = await fs.readFile(filePath);
-    const originalName = path.basename(storageKey).replace(/^[a-f0-9-]{36}-/, '');
+    const originalName = path
+      .basename(storageKey)
+      .replace(/^[a-f0-9-]{36}-/, '');
     return { buffer, originalName };
   }
 }

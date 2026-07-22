@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { Model } from 'mongoose';
 import {
   SettlementRequest,
   SettlementStatus,
@@ -55,7 +55,10 @@ export class SettlementRequestsService {
             `Meeting ${i + 1} date must not be in the future`,
           );
         }
-        const stored = await this.fileStorage.store(attachments[i], 'attachments');
+        const stored = await this.fileStorage.store(
+          attachments[i],
+          'attachments',
+        );
         return {
           meetingDate,
           capitalAtMeeting: m.capitalAtMeeting,
@@ -77,9 +80,9 @@ export class SettlementRequestsService {
       meetings,
     });
 
-    this.notifications.emit(
+    void this.notifications.emit(
       NotificationType.REQUEST_SUBMITTED,
-      request._id as Types.ObjectId,
+      request._id,
       request.crn,
     );
 
@@ -129,12 +132,7 @@ export class SettlementRequestsService {
     return request;
   }
 
-  async setFee(
-    requestId: string,
-    meetingId: string,
-    dto: SetFeeDto,
-    reviewedBy: string,
-  ) {
+  async setFee(requestId: string, meetingId: string, dto: SetFeeDto) {
     const request = await this.requestModel.findById(requestId).exec();
     if (!request) {
       throw new NotFoundException('Settlement request not found');
@@ -167,9 +165,13 @@ export class SettlementRequestsService {
       throw new ConflictException('Request is not under review');
     }
 
-    const missingFee = request.meetings.some((m) => m.fee === null || m.fee === undefined);
+    const missingFee = request.meetings.some(
+      (m) => m.fee === null || m.fee === undefined,
+    );
     if (missingFee) {
-      throw new BadRequestException('All meetings must have a fee set before approval');
+      throw new BadRequestException(
+        'All meetings must have a fee set before approval',
+      );
     }
 
     request.status = SettlementStatus.AWAITING_PAYMENT;
@@ -177,9 +179,9 @@ export class SettlementRequestsService {
     request.reviewedAt = new Date();
     await request.save();
 
-    this.notifications.emit(
+    void this.notifications.emit(
       NotificationType.REQUEST_APPROVED,
-      request._id as Types.ObjectId,
+      request._id,
       request.crn,
       request.ownerId,
     );
@@ -202,9 +204,9 @@ export class SettlementRequestsService {
     request.rejectionReason = dto?.rejectionReason ?? null;
     await request.save();
 
-    this.notifications.emit(
+    void this.notifications.emit(
       NotificationType.REQUEST_REJECTED,
-      request._id as Types.ObjectId,
+      request._id,
       request.crn,
       request.ownerId,
       dto?.rejectionReason,
@@ -225,7 +227,9 @@ export class SettlementRequestsService {
       request.status === SettlementStatus.PENDING_REVIEW ||
       request.status === SettlementStatus.REJECTED
     ) {
-      throw new ConflictException('Payment summary not available in current status');
+      throw new ConflictException(
+        'Payment summary not available in current status',
+      );
     }
 
     const meetingFees = request.meetings.map((m) => ({
@@ -253,9 +257,9 @@ export class SettlementRequestsService {
     request.paidAt = new Date();
     await request.save();
 
-    this.notifications.emit(
+    void this.notifications.emit(
       NotificationType.PAYMENT_RECEIVED,
-      request._id as Types.ObjectId,
+      request._id,
       request.crn,
     );
 
@@ -307,9 +311,9 @@ export class SettlementRequestsService {
       updated.settledAt = new Date();
       await updated.save();
 
-      this.notifications.emit(
+      void this.notifications.emit(
         NotificationType.REQUEST_SETTLED,
-        updated._id as Types.ObjectId,
+        updated._id,
         updated.crn,
         updated.ownerId,
       );

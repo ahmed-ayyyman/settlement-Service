@@ -104,9 +104,8 @@ export class SettlementRequestsController {
     @Param('id') id: string,
     @Param('meetingId') meetingId: string,
     @Body() dto: SetFeeDto,
-    @CurrentUser() user: JwtUser,
   ) {
-    return this.settlementRequestsService.setFee(id, meetingId, dto, user.sub);
+    return this.settlementRequestsService.setFee(id, meetingId, dto);
   }
 
   @Post(':id/approve')
@@ -127,7 +126,10 @@ export class SettlementRequestsController {
 
   @Get(':id/payment-summary')
   @Roles('owner')
-  async getPaymentSummary(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+  async getPaymentSummary(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtUser,
+  ) {
     return this.settlementRequestsService.getPaymentSummary(id, user.sub);
   }
 

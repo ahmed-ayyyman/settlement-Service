@@ -100,10 +100,7 @@ export class AuthService {
     }
   }
 
-  private async findUserByEmail(
-    token: string,
-    email: string,
-  ): Promise<string> {
+  private async findUserByEmail(token: string, email: string): Promise<string> {
     const { data: users } = await firstValueFrom(
       this.httpService.get(
         `${this.keycloakUrl}/admin/realms/${this.realm}/users?email=${encodeURIComponent(email)}`,

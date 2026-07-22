@@ -53,7 +53,10 @@ export class SettlementRequest extends Document {
   @Prop({
     type: [MeetingSchema],
     required: true,
-    validate: [(arr: Meeting[]) => arr.length > 0, 'At least one meeting is required'],
+    validate: [
+      (arr: Meeting[]) => arr.length > 0,
+      'At least one meeting is required',
+    ],
   })
   meetings: Meeting[];
 
@@ -75,7 +78,8 @@ export class SettlementRequest extends Document {
   createdAt: Date;
   updatedAt: Date;
 }
-export const SettlementRequestSchema = SchemaFactory.createForClass(SettlementRequest);
+export const SettlementRequestSchema =
+  SchemaFactory.createForClass(SettlementRequest);
 
 SettlementRequestSchema.set('toJSON', {
   virtuals: true,

@@ -18,7 +18,12 @@ export class CrnController {
   @Get(':crn/eligibility')
   @Roles('owner')
   checkEligibility(@Param('crn') crn: string) {
-    if (!crn || crn.length < 5 || crn.length > 20 || !/^[a-zA-Z0-9]+$/.test(crn)) {
+    if (
+      !crn ||
+      crn.length < 5 ||
+      crn.length > 20 ||
+      !/^[a-zA-Z0-9]+$/.test(crn)
+    ) {
       throw new BadRequestException('CRN must be 5-20 alphanumeric characters');
     }
     const result = this.crnEligibilityService.isEligible(crn);

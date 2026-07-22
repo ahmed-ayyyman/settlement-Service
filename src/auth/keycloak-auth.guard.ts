@@ -24,11 +24,11 @@ export class KeycloakStrategy extends PassportStrategy(Strategy, 'keycloak') {
     });
   }
 
-  async validate(payload: any): Promise<JwtUser> {
+  validate(payload: any): JwtUser {
     return {
-      sub: payload.sub,
-      email: payload.email,
-      roles: payload.realm_access?.roles ?? [],
+      sub: payload.sub as string,
+      email: payload.email as string | undefined,
+      roles: (payload.realm_access?.roles as string[]) ?? [],
     };
   }
 }

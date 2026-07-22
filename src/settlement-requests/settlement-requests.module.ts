@@ -18,7 +18,10 @@ import { NotificationsModule } from '../notifications/notifications.module';
     FilesModule,
     NotificationsModule,
   ],
-  controllers: [SettlementRequestsController, SettlementRequestsFilesController],
+  controllers: [
+    SettlementRequestsController,
+    SettlementRequestsFilesController,
+  ],
   providers: [SettlementRequestsService],
 })
 export class SettlementRequestsModule {}
