@@ -3,18 +3,14 @@ import {
   Get,
   Param,
   Patch,
-  UseGuards,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
-import { RolesGuard } from '../auth/roles.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { JwtUser } from '../auth/current-user.decorator';
 import { NotificationsService } from './notifications.service';
 
-@Controller('api/notifications')
-@UseGuards(AuthGuard('keycloak'), RolesGuard)
+@Controller('notifications')
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
@@ -30,7 +26,11 @@ export class NotificationsController {
 
   @Patch(':id/read')
   async markRead(@Param('id') id: string, @CurrentUser() user: JwtUser) {
-    const result = await this.notificationsService.markAsRead(id, user.sub);
+    const result = await this.notificationsService.markAsRead(
+      id,
+      user.sub,
+      user.roles,
+    );
     if (result === null) {
       throw new NotFoundException('Notification not found');
     }

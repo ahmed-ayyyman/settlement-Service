@@ -91,30 +91,38 @@ export class NotificationsService {
     return this.notificationModel
       .find({ recipientRole: 'owner', recipientId: ownerId })
       .sort({ createdAt: -1 })
-      .lean();
+      .exec();
   }
 
   async findForBackoffice(): Promise<Notification[]> {
     return this.notificationModel
       .find({ recipientRole: 'backoffice_employee' })
       .sort({ createdAt: -1 })
-      .lean();
+      .exec();
   }
 
   async markAsRead(
     notificationId: string,
     userId: string,
+    callerRoles: string[],
   ): Promise<{ id: string; isRead: boolean } | 'FORBIDDEN' | null> {
+    if (!Types.ObjectId.isValid(notificationId)) {
+      return null;
+    }
     const notification = await this.notificationModel
       .findById(notificationId)
       .exec();
     if (!notification) return null;
-    if (
-      notification.recipientRole === 'owner' &&
-      notification.recipientId !== userId
-    ) {
+
+    const isBackoffice = callerRoles.includes('backoffice_employee');
+    if (notification.recipientRole === 'owner') {
+      if (notification.recipientId !== userId) {
+        return 'FORBIDDEN';
+      }
+    } else if (!isBackoffice) {
       return 'FORBIDDEN';
     }
+
     notification.isRead = true;
     const saved = await notification.save();
     return { id: saved.id, isRead: true };

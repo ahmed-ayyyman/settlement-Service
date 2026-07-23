@@ -132,7 +132,7 @@ describe('NotificationsService', () => {
       );
       const notifications = await notificationModel.find().lean();
       const notifId = notifications[0]._id.toString();
-      const result = await service.markAsRead(notifId, 'owner-1');
+      const result = await service.markAsRead(notifId, 'owner-1', ['owner']);
       expect(result).not.toBeNull();
       expect((result as any).isRead).toBe(true);
     });
@@ -147,14 +147,42 @@ describe('NotificationsService', () => {
       );
       const notifications = await notificationModel.find().lean();
       const notifId = notifications[0]._id.toString();
-      const result = await service.markAsRead(notifId, 'owner-2');
+      const result = await service.markAsRead(notifId, 'owner-2', ['owner']);
       expect(result).toBe('FORBIDDEN');
+    });
+
+    it('returns FORBIDDEN when an owner tries to mark a backoffice broadcast', async () => {
+      const reqId = createRequestId();
+      await service.emit(NotificationType.REQUEST_SUBMITTED, reqId, 'CRN001');
+      const notifications = await notificationModel.find().lean();
+      const notifId = notifications[0]._id.toString();
+      const result = await service.markAsRead(notifId, 'owner-1', ['owner']);
+      expect(result).toBe('FORBIDDEN');
+    });
+
+    it('allows backoffice to mark a broadcast notification', async () => {
+      const reqId = createRequestId();
+      await service.emit(NotificationType.REQUEST_SUBMITTED, reqId, 'CRN001');
+      const notifications = await notificationModel.find().lean();
+      const notifId = notifications[0]._id.toString();
+      const result = await service.markAsRead(notifId, 'backoffice-1', [
+        'backoffice_employee',
+      ]);
+      expect((result as any).isRead).toBe(true);
+    });
+
+    it('returns null for an invalid notification id (no 500)', async () => {
+      const result = await service.markAsRead('not-a-valid-id', 'owner-1', [
+        'owner',
+      ]);
+      expect(result).toBeNull();
     });
 
     it('returns null for a non-existent notification', async () => {
       const result = await service.markAsRead(
         new mongoose.Types.ObjectId().toString(),
         'owner-1',
+        ['owner'],
       );
       expect(result).toBeNull();
     });
