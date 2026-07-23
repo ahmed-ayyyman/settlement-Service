@@ -1,11 +1,11 @@
-import { CrnEligibilityService } from './crn-eligibility.service';
+import { StubCrnEligibilityService } from './crn-eligibility.service';
 
 describe('CrnEligibilityService', () => {
-  let service: CrnEligibilityService;
+  let service: StubCrnEligibilityService;
 
   const createService = (settledCrns: string) => {
     const config = { get: jest.fn().mockReturnValue(settledCrns) };
-    return new CrnEligibilityService(config as any);
+    return new StubCrnEligibilityService(config as any);
   };
 
   it('returns needsSettlement=true for a CRN not in the settled list', () => {

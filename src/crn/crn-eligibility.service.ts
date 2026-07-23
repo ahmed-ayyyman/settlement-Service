@@ -1,8 +1,18 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+export const CRN_ELIGIBILITY_SERVICE = Symbol('CrnEligibilityService');
+
+export interface CrnEligibilityResult {
+  needsSettlement: boolean;
+}
+
+export interface CrnEligibilityService {
+  isEligible(crn: string): CrnEligibilityResult;
+}
+
 @Injectable()
-export class CrnEligibilityService {
+export class StubCrnEligibilityService implements CrnEligibilityService {
   private readonly settledCrns: Set<string>;
 
   constructor(configService: ConfigService) {
@@ -15,7 +25,7 @@ export class CrnEligibilityService {
     );
   }
 
-  isEligible(crn: string): { needsSettlement: boolean } {
+  isEligible(crn: string): CrnEligibilityResult {
     return { needsSettlement: !this.settledCrns.has(crn.toUpperCase()) };
   }
 }

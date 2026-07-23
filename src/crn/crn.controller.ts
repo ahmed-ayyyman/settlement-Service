@@ -2,18 +2,19 @@ import {
   BadRequestException,
   Controller,
   Get,
+  Inject,
   Param,
-  UseGuards,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
-import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
-import { CrnEligibilityService } from './crn-eligibility.service';
+import { CRN_ELIGIBILITY_SERVICE } from './crn-eligibility.service';
+import type { CrnEligibilityService } from './crn-eligibility.service';
 
-@Controller('api/crn')
-@UseGuards(AuthGuard('keycloak'), RolesGuard)
+@Controller('crn')
 export class CrnController {
-  constructor(private readonly crnEligibilityService: CrnEligibilityService) {}
+  constructor(
+    @Inject(CRN_ELIGIBILITY_SERVICE)
+    private readonly crnEligibilityService: CrnEligibilityService,
+  ) {}
 
   @Get(':crn/eligibility')
   @Roles('owner')
