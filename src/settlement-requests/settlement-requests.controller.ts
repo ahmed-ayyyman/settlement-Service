@@ -3,20 +3,18 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   Param,
   Patch,
   Post,
   Query,
   UploadedFile,
   UploadedFiles,
-  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
 import { FilesInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { JwtUser } from '../auth/current-user.decorator';
@@ -27,7 +25,8 @@ import { RejectRequestDto } from './dto/reject-request.dto';
 import { ListSettlementRequestsQueryDto } from './dto/list-settlement-requests.query.dto';
 
 const ALLOWED_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const MAX_UPLOAD_SIZE_MB = Number(process.env.MAX_UPLOAD_SIZE_MB) || 10;
+const MAX_FILE_SIZE = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
 
 function validateFile(file: Express.Multer.File) {
   if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
@@ -36,12 +35,13 @@ function validateFile(file: Express.Multer.File) {
     );
   }
   if (file.size > MAX_FILE_SIZE) {
-    throw new BadRequestException('File size exceeds 10 MB limit');
+    throw new BadRequestException(
+      `File size exceeds ${MAX_UPLOAD_SIZE_MB} MB limit`,
+    );
   }
 }
 
-@Controller('api/settlement-requests')
-@UseGuards(AuthGuard('keycloak'), RolesGuard)
+@Controller('settlement-requests')
 export class SettlementRequestsController {
   constructor(
     private readonly settlementRequestsService: SettlementRequestsService,
@@ -49,7 +49,11 @@ export class SettlementRequestsController {
 
   @Post()
   @Roles('owner')
-  @UseInterceptors(FilesInterceptor('attachments'))
+  @UseInterceptors(
+    FilesInterceptor('attachments', undefined, {
+      limits: { fileSize: MAX_FILE_SIZE },
+    }),
+  )
   async create(
     @Body('payload') payloadRaw: string,
     @UploadedFiles() attachments: Express.Multer.File[],
@@ -110,6 +114,7 @@ export class SettlementRequestsController {
 
   @Post(':id/approve')
   @Roles('backoffice_employee')
+  @HttpCode(200)
   async approve(@Param('id') id: string, @CurrentUser() user: JwtUser) {
     return this.settlementRequestsService.approve(id, user.sub);
   }
@@ -135,13 +140,16 @@ export class SettlementRequestsController {
 
   @Post(':id/pay')
   @Roles('owner')
+  @HttpCode(200)
   async pay(@Param('id') id: string, @CurrentUser() user: JwtUser) {
     return this.settlementRequestsService.pay(id, user.sub);
   }
 
   @Post(':id/meetings/:meetingId/settlement-document')
   @Roles('backoffice_employee')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: MAX_FILE_SIZE } }),
+  )
   async uploadSettlementDocument(
     @Param('id') id: string,
     @Param('meetingId') meetingId: string,

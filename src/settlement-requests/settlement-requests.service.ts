@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  Inject,
   Injectable,
   ForbiddenException,
   NotFoundException,
@@ -15,7 +16,8 @@ import { CreateSettlementRequestDto } from './dto/create-settlement-request.dto'
 import { SetFeeDto } from './dto/set-fee.dto';
 import { RejectRequestDto } from './dto/reject-request.dto';
 import { ListSettlementRequestsQueryDto } from './dto/list-settlement-requests.query.dto';
-import { FileStorageService } from '../files/file-storage.service';
+import { FILE_STORAGE_SERVICE } from '../files/file-storage.service';
+import type { FileStorageService } from '../files/file-storage.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/schemas/notification.schema';
 
@@ -24,6 +26,7 @@ export class SettlementRequestsService {
   constructor(
     @InjectModel(SettlementRequest.name)
     private readonly requestModel: Model<SettlementRequest>,
+    @Inject(FILE_STORAGE_SERVICE)
     private readonly fileStorage: FileStorageService,
     private readonly notifications: NotificationsService,
   ) {}
@@ -64,6 +67,7 @@ export class SettlementRequestsService {
           capitalAtMeeting: m.capitalAtMeeting,
           attachmentUrl: stored.key,
           attachmentOriginalName: stored.originalName,
+          attachmentMimeType: attachments[i].mimetype,
           fee: null,
           settlementDocumentUrl: null,
           settlementDocumentUploadedAt: null,
@@ -93,7 +97,7 @@ export class SettlementRequestsService {
     const request = await this.requestModel
       .findOne({ ownerId })
       .sort({ createdAt: -1 })
-      .lean();
+      .exec();
     return { request: request ?? null };
   }
 
@@ -112,7 +116,7 @@ export class SettlementRequestsService {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .lean(),
+        .exec(),
       this.requestModel.countDocuments(filter),
     ]);
 
@@ -120,11 +124,11 @@ export class SettlementRequestsService {
   }
 
   async findById(id: string, userId?: string, userRoles?: string[]) {
-    const request = await this.requestModel.findById(id).lean();
+    const request = await this.requestModel.findById(id).exec();
     if (!request) {
       throw new NotFoundException('Settlement request not found');
     }
-    if (userRoles && !userRoles.includes('backoffice_employee')) {
+    if (!userRoles?.includes('backoffice_employee')) {
       if (request.ownerId !== userId) {
         throw new ForbiddenException('Access denied');
       }

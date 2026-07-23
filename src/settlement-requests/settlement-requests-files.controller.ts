@@ -1,24 +1,18 @@
-import {
-  Controller,
-  Get,
-  NotFoundException,
-  Param,
-  Res,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, NotFoundException, Param, Res } from '@nestjs/common';
+import { Inject } from '@nestjs/common';
 import type { Response } from 'express';
-import { AuthGuard } from '@nestjs/passport';
-import { RolesGuard } from '../auth/roles.guard';
+import { pipeline } from 'stream/promises';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { JwtUser } from '../auth/current-user.decorator';
 import { SettlementRequestsService } from './settlement-requests.service';
-import { FileStorageService } from '../files/file-storage.service';
+import { FILE_STORAGE_SERVICE } from '../files/file-storage.service';
+import type { FileStorageService } from '../files/file-storage.service';
 
-@Controller('api/settlement-requests/:id/meetings/:meetingId')
-@UseGuards(AuthGuard('keycloak'), RolesGuard)
+@Controller('settlement-requests/:id/meetings/:meetingId')
 export class SettlementRequestsFilesController {
   constructor(
     private readonly settlementRequestsService: SettlementRequestsService,
+    @Inject(FILE_STORAGE_SERVICE)
     private readonly fileStorage: FileStorageService,
   ) {}
 
@@ -43,12 +37,13 @@ export class SettlementRequestsFilesController {
     if (!meeting.attachmentUrl) {
       throw new NotFoundException('No attachment for this meeting');
     }
-    const file = await this.fileStorage.read(meeting.attachmentUrl);
+    const file = await this.readOrFail(meeting.attachmentUrl);
     res.set({
-      'Content-Type': 'application/octet-stream',
-      'Content-Disposition': `attachment; filename="${meeting.attachmentOriginalName || 'attachment'}"`,
+      'Content-Type': meeting.attachmentMimeType || file.mimeType,
+      'Content-Disposition': `attachment; filename="${meeting.attachmentOriginalName || file.originalName}"`,
+      'Content-Length': file.size,
     });
-    res.send(file.buffer);
+    await pipeline(file.stream, res);
   }
 
   @Get('settlement-document')
@@ -72,11 +67,20 @@ export class SettlementRequestsFilesController {
     if (!meeting.settlementDocumentUrl) {
       throw new NotFoundException('No settlement document for this meeting');
     }
-    const file = await this.fileStorage.read(meeting.settlementDocumentUrl);
+    const file = await this.readOrFail(meeting.settlementDocumentUrl);
     res.set({
-      'Content-Type': 'application/octet-stream',
-      'Content-Disposition': `attachment; filename="settlement-document"`,
+      'Content-Type': file.mimeType,
+      'Content-Disposition': `attachment; filename="${file.originalName}"`,
+      'Content-Length': file.size,
     });
-    res.send(file.buffer);
+    await pipeline(file.stream, res);
+  }
+
+  private async readOrFail(storageKey: string) {
+    try {
+      return await this.fileStorage.read(storageKey);
+    } catch {
+      throw new NotFoundException('File not found on disk');
+    }
   }
 }

@@ -23,6 +23,9 @@ export class Meeting {
   @Prop()
   attachmentOriginalName?: string;
 
+  @Prop()
+  attachmentMimeType?: string;
+
   @Prop({ type: Number, default: null, min: 0 })
   fee: number | null;
 

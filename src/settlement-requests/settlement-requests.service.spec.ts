@@ -8,7 +8,7 @@ import {
   SettlementRequestSchema,
   SettlementStatus,
 } from './schemas/settlement-request.schema';
-import { FileStorageService } from '../files/file-storage.service';
+import { FILE_STORAGE_SERVICE } from '../files/file-storage.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateSettlementRequestDto } from './dto/create-settlement-request.dto';
 
@@ -36,6 +36,7 @@ describe('SettlementRequestsService', () => {
       SettlementRequest.name,
       SettlementRequestSchema,
     );
+    await requestModel.init();
   });
 
   afterAll(async () => {
@@ -55,7 +56,7 @@ describe('SettlementRequestsService', () => {
           provide: getModelToken(SettlementRequest.name),
           useValue: requestModel,
         },
-        { provide: FileStorageService, useValue: mockFileStorage },
+        { provide: FILE_STORAGE_SERVICE, useValue: mockFileStorage },
         { provide: NotificationsService, useValue: mockNotifications },
       ],
     }).compile();
@@ -126,6 +127,38 @@ describe('SettlementRequestsService', () => {
       await expect(
         createRequest('owner-2', 'CRN001', 1),
       ).resolves.toBeDefined();
+    });
+
+    it('rejects a concurrent duplicate insert via the partial unique index', async () => {
+      mockFileStorage.store.mockResolvedValue({
+        key: 'attachments/concurrent',
+        originalName: 'doc.pdf',
+      });
+      const dto: CreateSettlementRequestDto = {
+        crn: 'CRN001',
+        meetings: [
+          { meetingDate: '2024-01-15T00:00:00Z', capitalAtMeeting: 100000 },
+        ],
+      };
+      const attachments = [
+        {
+          originalname: 'doc.pdf',
+          mimetype: 'application/pdf',
+          size: 1000,
+          buffer: Buffer.from('test'),
+        },
+      ] as Express.Multer.File[];
+
+      const results = await Promise.allSettled([
+        service.create('owner-concurrent', dto, attachments),
+        service.create('owner-concurrent', dto, attachments),
+      ]);
+
+      const fulfilled = results.filter((r) => r.status === 'fulfilled');
+      const rejected = results.filter((r) => r.status === 'rejected');
+      expect(fulfilled).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect(rejected[0].reason).toBeInstanceOf(Error);
     });
 
     it('sorts meetings by meetingDate ascending', async () => {
@@ -204,12 +237,7 @@ describe('SettlementRequestsService', () => {
     it('sets fee on a meeting', async () => {
       const req = await createRequest('owner-1', 'CRN001', 1);
       const meetingId = req.meetings[0]._id.toString();
-      const result = await service.setFee(
-        req.id,
-        meetingId,
-        { fee: 500 },
-        'backoffice-1',
-      );
+      const result = await service.setFee(req.id, meetingId, { fee: 500 });
       expect(result.fee).toBe(500);
     });
 
@@ -220,7 +248,7 @@ describe('SettlementRequestsService', () => {
       });
       const meetingId = req.meetings[0]._id.toString();
       await expect(
-        service.setFee(req.id, meetingId, { fee: 500 }, 'backoffice-1'),
+        service.setFee(req.id, meetingId, { fee: 500 }),
       ).rejects.toThrow('Request is not under review');
     });
   });
@@ -229,12 +257,7 @@ describe('SettlementRequestsService', () => {
     it('approves when all meetings have fees', async () => {
       const req = await createRequest('owner-1', 'CRN001', 2);
       for (const meeting of req.meetings) {
-        await service.setFee(
-          req.id,
-          meeting._id.toString(),
-          { fee: 250 },
-          'backoffice-1',
-        );
+        await service.setFee(req.id, meeting._id.toString(), { fee: 250 });
       }
       const result = await service.approve(req.id, 'backoffice-1');
       expect(result.status).toBe(SettlementStatus.AWAITING_PAYMENT);
@@ -242,12 +265,9 @@ describe('SettlementRequestsService', () => {
 
     it('rejects approval when a meeting has no fee', async () => {
       const req = await createRequest('owner-1', 'CRN001', 2);
-      await service.setFee(
-        req.id,
-        req.meetings[0]._id.toString(),
-        { fee: 250 },
-        'backoffice-1',
-      );
+      await service.setFee(req.id, req.meetings[0]._id.toString(), {
+        fee: 250,
+      });
       await expect(service.approve(req.id, 'backoffice-1')).rejects.toThrow(
         'All meetings must have a fee set',
       );
@@ -255,12 +275,9 @@ describe('SettlementRequestsService', () => {
 
     it('rejects approval when not PENDING_REVIEW', async () => {
       const req = await createRequest('owner-1', 'CRN001', 1);
-      await service.setFee(
-        req.id,
-        req.meetings[0]._id.toString(),
-        { fee: 250 },
-        'backoffice-1',
-      );
+      await service.setFee(req.id, req.meetings[0]._id.toString(), {
+        fee: 250,
+      });
       await service.approve(req.id, 'backoffice-1');
       await expect(service.approve(req.id, 'backoffice-1')).rejects.toThrow(
         'Request is not under review',
@@ -300,12 +317,7 @@ describe('SettlementRequestsService', () => {
     it('returns fee breakdown and total', async () => {
       const req = await createRequest('owner-1', 'CRN001', 2);
       for (const meeting of req.meetings) {
-        await service.setFee(
-          req.id,
-          meeting._id.toString(),
-          { fee: 300 },
-          'backoffice-1',
-        );
+        await service.setFee(req.id, meeting._id.toString(), { fee: 300 });
       }
       await service.approve(req.id, 'backoffice-1');
       const summary = await service.getPaymentSummary(req.id, 'owner-1');
@@ -339,12 +351,9 @@ describe('SettlementRequestsService', () => {
   describe('pay', () => {
     it('moves to AWAITING_SETTLEMENT', async () => {
       const req = await createRequest('owner-1', 'CRN001', 1);
-      await service.setFee(
-        req.id,
-        req.meetings[0]._id.toString(),
-        { fee: 100 },
-        'backoffice-1',
-      );
+      await service.setFee(req.id, req.meetings[0]._id.toString(), {
+        fee: 100,
+      });
       await service.approve(req.id, 'backoffice-1');
       const result = await service.pay(req.id, 'owner-1');
       expect(result.status).toBe(SettlementStatus.AWAITING_SETTLEMENT);
@@ -359,12 +368,9 @@ describe('SettlementRequestsService', () => {
 
     it('rejects pay from wrong owner', async () => {
       const req = await createRequest('owner-1', 'CRN001', 1);
-      await service.setFee(
-        req.id,
-        req.meetings[0]._id.toString(),
-        { fee: 100 },
-        'backoffice-1',
-      );
+      await service.setFee(req.id, req.meetings[0]._id.toString(), {
+        fee: 100,
+      });
       await service.approve(req.id, 'backoffice-1');
       await expect(service.pay(req.id, 'owner-2')).rejects.toThrow(
         'Access denied',
@@ -378,12 +384,7 @@ describe('SettlementRequestsService', () => {
     it('uploads a document and stays in AWAITING_SETTLEMENT if not all docs are in', async () => {
       const req = await createRequest('owner-1', 'CRN001', 2);
       for (const meeting of req.meetings) {
-        await service.setFee(
-          req.id,
-          meeting._id.toString(),
-          { fee: 100 },
-          'backoffice-1',
-        );
+        await service.setFee(req.id, meeting._id.toString(), { fee: 100 });
       }
       await service.approve(req.id, 'backoffice-1');
       await service.pay(req.id, 'owner-1');
@@ -407,12 +408,9 @@ describe('SettlementRequestsService', () => {
 
     it('auto-settles when all meeting docs are uploaded', async () => {
       const req = await createRequest('owner-1', 'CRN001', 1);
-      await service.setFee(
-        req.id,
-        req.meetings[0]._id.toString(),
-        { fee: 100 },
-        'backoffice-1',
-      );
+      await service.setFee(req.id, req.meetings[0]._id.toString(), {
+        fee: 100,
+      });
       await service.approve(req.id, 'backoffice-1');
       await service.pay(req.id, 'owner-1');
 
@@ -464,12 +462,9 @@ describe('SettlementRequestsService', () => {
 
     it('emits REQUEST_APPROVED on approve', async () => {
       const req = await createRequest('owner-1', 'CRN001', 1);
-      await service.setFee(
-        req.id,
-        req.meetings[0]._id.toString(),
-        { fee: 100 },
-        'backoffice-1',
-      );
+      await service.setFee(req.id, req.meetings[0]._id.toString(), {
+        fee: 100,
+      });
       await service.approve(req.id, 'backoffice-1');
       expect(mockNotifications.emit).toHaveBeenCalledWith(
         'REQUEST_APPROVED',
@@ -495,12 +490,9 @@ describe('SettlementRequestsService', () => {
 
     it('emits PAYMENT_RECEIVED on pay', async () => {
       const req = await createRequest('owner-1', 'CRN001', 1);
-      await service.setFee(
-        req.id,
-        req.meetings[0]._id.toString(),
-        { fee: 100 },
-        'backoffice-1',
-      );
+      await service.setFee(req.id, req.meetings[0]._id.toString(), {
+        fee: 100,
+      });
       await service.approve(req.id, 'backoffice-1');
       await service.pay(req.id, 'owner-1');
       expect(mockNotifications.emit).toHaveBeenCalledWith(
@@ -512,12 +504,9 @@ describe('SettlementRequestsService', () => {
 
     it('emits REQUEST_SETTLED on auto-settle', async () => {
       const req = await createRequest('owner-1', 'CRN001', 1);
-      await service.setFee(
-        req.id,
-        req.meetings[0]._id.toString(),
-        { fee: 100 },
-        'backoffice-1',
-      );
+      await service.setFee(req.id, req.meetings[0]._id.toString(), {
+        fee: 100,
+      });
       await service.approve(req.id, 'backoffice-1');
       await service.pay(req.id, 'owner-1');
       mockFileStorage.store.mockResolvedValue({
