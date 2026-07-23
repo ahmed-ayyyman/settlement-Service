@@ -6,16 +6,27 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
 import {
   SettlementRequest,
   SettlementStatus,
 } from './schemas/settlement-request.schema';
-import { CreateSettlementRequestDto } from './dto/create-settlement-request.dto';
-import { SetFeeDto } from './dto/set-fee.dto';
-import { RejectRequestDto } from './dto/reject-request.dto';
-import { ListSettlementRequestsQueryDto } from './dto/list-settlement-requests.query.dto';
+import { CreateSettlementRequestDto } from './dto/input/create-settlement-request.dto';
+import { SetFeeDto } from './dto/input/set-fee.dto';
+import { RejectRequestDto } from './dto/input/reject-request.dto';
+import { ListSettlementRequestsQueryDto } from './dto/input/list-settlement-requests.query.dto';
+import { SettlementRequestRepository } from './repositories/settlement-request.repository';
+import { SettlementRequestResponseDto } from './dto/output/settlement-request-response.dto';
+import { FindMineResponseDto } from './dto/output/find-mine-response.dto';
+import { PaginatedResponseDto } from './dto/output/paginated-response.dto';
+import { SetFeeResponseDto } from './dto/output/set-fee-response.dto';
+import { ApproveResponseDto } from './dto/output/approve-response.dto';
+import { RejectResponseDto } from './dto/output/reject-response.dto';
+import {
+  PaymentSummaryMeetingFeeDto,
+  PaymentSummaryResponseDto,
+} from './dto/output/payment-summary-response.dto';
+import { PayResponseDto } from './dto/output/pay-response.dto';
+import { UploadSettlementDocumentResponseDto } from './dto/output/upload-document-response.dto';
 import { FILE_STORAGE_SERVICE } from '../files/file-storage.service';
 import type { FileStorageService } from '../files/file-storage.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -24,8 +35,7 @@ import { NotificationType } from '../notifications/schemas/notification.schema';
 @Injectable()
 export class SettlementRequestsService {
   constructor(
-    @InjectModel(SettlementRequest.name)
-    private readonly requestModel: Model<SettlementRequest>,
+    private readonly requestRepo: SettlementRequestRepository,
     @Inject(FILE_STORAGE_SERVICE)
     private readonly fileStorage: FileStorageService,
     private readonly notifications: NotificationsService,
@@ -35,17 +45,8 @@ export class SettlementRequestsService {
     ownerId: string,
     dto: CreateSettlementRequestDto,
     attachments: Express.Multer.File[],
-  ) {
-    const existing = await this.requestModel.findOne({
-      ownerId,
-      status: {
-        $in: [
-          SettlementStatus.PENDING_REVIEW,
-          SettlementStatus.AWAITING_PAYMENT,
-          SettlementStatus.AWAITING_SETTLEMENT,
-        ],
-      },
-    });
+  ): Promise<SettlementRequestResponseDto> {
+    const existing = await this.requestRepo.findActiveByOwner(ownerId);
     if (existing) {
       throw new ConflictException('Request already in progress');
     }
@@ -77,54 +78,50 @@ export class SettlementRequestsService {
 
     meetings.sort((a, b) => a.meetingDate.getTime() - b.meetingDate.getTime());
 
-    const request = await this.requestModel.create({
+    const request = await this.requestRepo.create({
       crn: dto.crn,
       ownerId,
       status: SettlementStatus.PENDING_REVIEW,
       meetings,
     });
 
-    void this.notifications.emit(
-      NotificationType.REQUEST_SUBMITTED,
-      request._id,
-      request.crn,
-    );
+    this.notifications
+      .emit(NotificationType.REQUEST_SUBMITTED, request._id, request.crn)
+      .catch(() => {});
 
-    return request.toJSON();
+    return this.toResponse(request);
   }
 
-  async findMine(ownerId: string) {
-    const request = await this.requestModel
-      .findOne({ ownerId })
-      .sort({ createdAt: -1 })
-      .exec();
-    return { request: request ?? null };
+  async findMine(ownerId: string): Promise<FindMineResponseDto> {
+    const request = await this.requestRepo.findMostRecentByOwner(ownerId);
+    return {
+      request: request ? this.toResponse(request) : null,
+    };
   }
 
-  async findAll(query: ListSettlementRequestsQueryDto) {
-    const filter: any = {};
+  async findAll(
+    query: ListSettlementRequestsQueryDto,
+  ): Promise<PaginatedResponseDto<SettlementRequestResponseDto>> {
+    const filter: Record<string, unknown> = {};
     if (query.status) {
       filter.status = query.status;
     }
-    const page = query.page ?? 1;
-    const limit = query.limit ?? 20;
-    const skip = (page - 1) * limit;
 
-    const [items, total] = await Promise.all([
-      this.requestModel
-        .find(filter)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .exec(),
-      this.requestModel.countDocuments(filter),
-    ]);
-
-    return { items, total, page, limit };
+    const result = await this.requestRepo.findAllPaginated(filter, query);
+    return {
+      items: result.items.map((item) => this.toResponse(item)),
+      total: result.total,
+      page: result.page,
+      limit: result.limit,
+    };
   }
 
-  async findById(id: string, userId?: string, userRoles?: string[]) {
-    const request = await this.requestModel.findById(id).exec();
+  async findById(
+    id: string,
+    userId?: string,
+    userRoles?: string[],
+  ): Promise<SettlementRequestResponseDto> {
+    const request = await this.requestRepo.findById(id);
     if (!request) {
       throw new NotFoundException('Settlement request not found');
     }
@@ -133,11 +130,15 @@ export class SettlementRequestsService {
         throw new ForbiddenException('Access denied');
       }
     }
-    return request;
+    return this.toResponse(request);
   }
 
-  async setFee(requestId: string, meetingId: string, dto: SetFeeDto) {
-    const request = await this.requestModel.findById(requestId).exec();
+  async setFee(
+    requestId: string,
+    meetingId: string,
+    dto: SetFeeDto,
+  ): Promise<SetFeeResponseDto> {
+    const request = await this.requestRepo.findById(requestId);
     if (!request) {
       throw new NotFoundException('Settlement request not found');
     }
@@ -145,23 +146,21 @@ export class SettlementRequestsService {
       throw new ConflictException('Request is not under review');
     }
 
-    const meeting = (request.meetings as any[]).find(
-      (m) => m._id.toString() === meetingId,
-    );
+    const meeting = this.requestRepo.findMeetingById(request, meetingId);
     if (!meeting) {
       throw new NotFoundException('Meeting not found in this request');
     }
 
-    await this.requestModel.updateOne(
-      { _id: requestId, 'meetings._id': meetingId },
-      { $set: { 'meetings.$.fee': dto.fee } },
-    );
+    await this.requestRepo.updateMeetingFee(requestId, meetingId, dto.fee);
 
     return { meetingId, fee: dto.fee };
   }
 
-  async approve(requestId: string, reviewedBy: string) {
-    const request = await this.requestModel.findById(requestId).exec();
+  async approve(
+    requestId: string,
+    reviewedBy: string,
+  ): Promise<ApproveResponseDto> {
+    const request = await this.requestRepo.findById(requestId);
     if (!request) {
       throw new NotFoundException('Settlement request not found');
     }
@@ -169,10 +168,7 @@ export class SettlementRequestsService {
       throw new ConflictException('Request is not under review');
     }
 
-    const missingFee = request.meetings.some(
-      (m) => m.fee === null || m.fee === undefined,
-    );
-    if (missingFee) {
+    if (!this.requestRepo.allMeetingsHaveFees(request)) {
       throw new BadRequestException(
         'All meetings must have a fee set before approval',
       );
@@ -181,20 +177,26 @@ export class SettlementRequestsService {
     request.status = SettlementStatus.AWAITING_PAYMENT;
     request.reviewedBy = reviewedBy;
     request.reviewedAt = new Date();
-    await request.save();
+    await this.requestRepo.save(request);
 
-    void this.notifications.emit(
-      NotificationType.REQUEST_APPROVED,
-      request._id,
-      request.crn,
-      request.ownerId,
-    );
+    this.notifications
+      .emit(
+        NotificationType.REQUEST_APPROVED,
+        request._id,
+        request.crn,
+        request.ownerId,
+      )
+      .catch(() => {});
 
-    return { status: request.status };
+    return { status: SettlementStatus.AWAITING_PAYMENT };
   }
 
-  async reject(requestId: string, reviewedBy: string, dto?: RejectRequestDto) {
-    const request = await this.requestModel.findById(requestId).exec();
+  async reject(
+    requestId: string,
+    reviewedBy: string,
+    dto?: RejectRequestDto,
+  ): Promise<RejectResponseDto> {
+    const request = await this.requestRepo.findById(requestId);
     if (!request) {
       throw new NotFoundException('Settlement request not found');
     }
@@ -206,21 +208,26 @@ export class SettlementRequestsService {
     request.reviewedBy = reviewedBy;
     request.reviewedAt = new Date();
     request.rejectionReason = dto?.rejectionReason ?? null;
-    await request.save();
+    await this.requestRepo.save(request);
 
-    void this.notifications.emit(
-      NotificationType.REQUEST_REJECTED,
-      request._id,
-      request.crn,
-      request.ownerId,
-      dto?.rejectionReason,
-    );
+    this.notifications
+      .emit(
+        NotificationType.REQUEST_REJECTED,
+        request._id,
+        request.crn,
+        request.ownerId,
+        dto?.rejectionReason,
+      )
+      .catch(() => {});
 
-    return { status: request.status };
+    return { status: SettlementStatus.REJECTED };
   }
 
-  async getPaymentSummary(requestId: string, userId: string) {
-    const request = await this.requestModel.findById(requestId).lean();
+  async getPaymentSummary(
+    requestId: string,
+    userId: string,
+  ): Promise<PaymentSummaryResponseDto> {
+    const request = await this.requestRepo.findByIdLean(requestId);
     if (!request) {
       throw new NotFoundException('Settlement request not found');
     }
@@ -236,17 +243,15 @@ export class SettlementRequestsService {
       );
     }
 
-    const meetingFees = request.meetings.map((m) => ({
-      meetingId: (m as any)._id,
-      fee: m.fee ?? 0,
-    }));
+    const meetingFees: PaymentSummaryMeetingFeeDto[] =
+      this.requestRepo.getMeetingsWithFees(request);
     const total = meetingFees.reduce((sum, m) => sum + m.fee, 0);
 
     return { meetingFees, total };
   }
 
-  async pay(requestId: string, userId: string) {
-    const request = await this.requestModel.findById(requestId).exec();
+  async pay(requestId: string, userId: string): Promise<PayResponseDto> {
+    const request = await this.requestRepo.findById(requestId);
     if (!request) {
       throw new NotFoundException('Settlement request not found');
     }
@@ -259,23 +264,21 @@ export class SettlementRequestsService {
 
     request.status = SettlementStatus.AWAITING_SETTLEMENT;
     request.paidAt = new Date();
-    await request.save();
+    await this.requestRepo.save(request);
 
-    void this.notifications.emit(
-      NotificationType.PAYMENT_RECEIVED,
-      request._id,
-      request.crn,
-    );
+    this.notifications
+      .emit(NotificationType.PAYMENT_RECEIVED, request._id, request.crn)
+      .catch(() => {});
 
-    return { status: request.status };
+    return { status: SettlementStatus.AWAITING_SETTLEMENT };
   }
 
   async uploadSettlementDocument(
     requestId: string,
     meetingId: string,
     file: Express.Multer.File,
-  ) {
-    const request = await this.requestModel.findById(requestId).exec();
+  ): Promise<UploadSettlementDocumentResponseDto> {
+    const request = await this.requestRepo.findById(requestId);
     if (!request) {
       throw new NotFoundException('Settlement request not found');
     }
@@ -283,48 +286,51 @@ export class SettlementRequestsService {
       throw new ConflictException('Request is not awaiting settlement');
     }
 
-    const meeting = (request.meetings as any[]).find(
-      (m) => m._id.toString() === meetingId,
-    );
+    const meeting = this.requestRepo.findMeetingById(request, meetingId);
     if (!meeting) {
       throw new NotFoundException('Meeting not found in this request');
     }
 
     const stored = await this.fileStorage.store(file, 'settlement-documents');
-
-    await this.requestModel.updateOne(
-      { _id: requestId, 'meetings._id': meetingId },
-      {
-        $set: {
-          'meetings.$.settlementDocumentUrl': stored.key,
-          'meetings.$.settlementDocumentUploadedAt': new Date(),
-        },
-      },
+    await this.requestRepo.updateMeetingSettlementDocument(
+      requestId,
+      meetingId,
+      stored.key,
     );
 
-    const updated = await this.requestModel.findById(requestId).exec();
+    const updated = await this.requestRepo.findById(requestId);
     if (!updated) {
       throw new NotFoundException('Settlement request not found after update');
     }
-    const allHaveDocs = updated.meetings.every(
-      (m) => m.settlementDocumentUrl !== null,
-    );
 
-    if (allHaveDocs) {
+    if (this.requestRepo.allMeetingsHaveDocuments(updated)) {
       updated.status = SettlementStatus.SETTLED;
       updated.settledAt = new Date();
-      await updated.save();
+      await this.requestRepo.save(updated);
 
-      void this.notifications.emit(
-        NotificationType.REQUEST_SETTLED,
-        updated._id,
-        updated.crn,
-        updated.ownerId,
-      );
+      this.notifications
+        .emit(
+          NotificationType.REQUEST_SETTLED,
+          updated._id,
+          updated.crn,
+          updated.ownerId,
+        )
+        .catch(() => {});
 
       return { status: SettlementStatus.SETTLED, meetingId };
     }
 
     return { status: SettlementStatus.AWAITING_SETTLEMENT, meetingId };
+  }
+
+  private toResponse(request: SettlementRequest): SettlementRequestResponseDto {
+    const json = request.toJSON();
+    return {
+      ...json,
+      meetings: json.meetings.map((m: any) => ({
+        ...m,
+        _id: m._id ? m._id.toString() : m._id,
+      })),
+    };
   }
 }

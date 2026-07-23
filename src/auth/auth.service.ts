@@ -7,7 +7,8 @@ import {
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
-import { RegisterDto } from './register.dto';
+import { RegisterDto } from './dto/input/register.dto';
+import { RegisterResponseDto } from './dto/output/register-response.dto';
 
 @Injectable()
 export class AuthService {
@@ -27,7 +28,7 @@ export class AuthService {
     this.clientSecret = configService.get<string>('KEYCLOAK_CLIENT_SECRET')!;
   }
 
-  async register(dto: RegisterDto): Promise<{ id: string; email: string }> {
+  async register(dto: RegisterDto): Promise<RegisterResponseDto> {
     const token = await this.getAdminToken();
     const userId = await this.createKeycloakUser(token, dto);
     await this.assignRole(token, userId, 'owner');

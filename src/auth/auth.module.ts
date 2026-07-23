@@ -5,7 +5,6 @@ import { ConfigModule } from '@nestjs/config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { KeycloakStrategy } from './keycloak-auth.guard';
-import { RolesGuard } from './roles.guard';
 
 @Module({
   imports: [
@@ -14,7 +13,7 @@ import { RolesGuard } from './roles.guard';
     ConfigModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, KeycloakStrategy, RolesGuard],
-  exports: [KeycloakStrategy, RolesGuard, PassportModule],
+  providers: [AuthService, KeycloakStrategy],
+  exports: [KeycloakStrategy, PassportModule],
 })
 export class AuthModule {}

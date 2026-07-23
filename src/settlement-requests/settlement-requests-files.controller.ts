@@ -28,9 +28,7 @@ export class SettlementRequestsFilesController {
       user.sub,
       user.roles,
     );
-    const meeting = (request.meetings as any[]).find(
-      (m: any) => m._id.toString() === meetingId || m._id === meetingId,
-    );
+    const meeting = request.meetings.find((m) => m._id === meetingId);
     if (!meeting) {
       throw new NotFoundException('Meeting not found');
     }
@@ -58,9 +56,7 @@ export class SettlementRequestsFilesController {
       user.sub,
       user.roles,
     );
-    const meeting = (request.meetings as any[]).find(
-      (m: any) => m._id.toString() === meetingId || m._id === meetingId,
-    );
+    const meeting = request.meetings.find((m) => m._id === meetingId);
     if (!meeting) {
       throw new NotFoundException('Meeting not found');
     }

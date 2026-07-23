@@ -3,6 +3,7 @@ import { getModelToken } from '@nestjs/mongoose';
 import mongoose, { Model } from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { SettlementRequestsService } from './settlement-requests.service';
+import { SettlementRequestRepository } from './repositories/settlement-request.repository';
 import {
   SettlementRequest,
   SettlementRequestSchema,
@@ -10,7 +11,7 @@ import {
 } from './schemas/settlement-request.schema';
 import { FILE_STORAGE_SERVICE } from '../files/file-storage.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { CreateSettlementRequestDto } from './dto/create-settlement-request.dto';
+import { CreateSettlementRequestDto } from './dto/input/create-settlement-request.dto';
 
 describe('SettlementRequestsService', () => {
   let service: SettlementRequestsService;
@@ -23,7 +24,7 @@ describe('SettlementRequestsService', () => {
   };
 
   const mockNotifications = {
-    emit: jest.fn(),
+    emit: jest.fn().mockResolvedValue(undefined),
   };
 
   let mockFileStorageIndex = 0;
@@ -52,6 +53,7 @@ describe('SettlementRequestsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SettlementRequestsService,
+        SettlementRequestRepository,
         {
           provide: getModelToken(SettlementRequest.name),
           useValue: requestModel,

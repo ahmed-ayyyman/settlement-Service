@@ -1,16 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { Types } from 'mongoose';
 import { Notification, NotificationType } from './schemas/notification.schema';
+import { NotificationRepository } from './repositories/notification.repository';
+import { NotificationResponseDto } from './dto/output/notification-response.dto';
+import { MarkReadResponseDto } from './dto/output/mark-read-response.dto';
 
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
 
-  constructor(
-    @InjectModel(Notification.name)
-    private readonly notificationModel: Model<Notification>,
-  ) {}
+  constructor(private readonly notificationRepo: NotificationRepository) {}
 
   async emit(
     type: NotificationType,
@@ -26,7 +25,7 @@ export class NotificationsService {
         ownerId,
         rejectionReason,
       );
-      await this.notificationModel.create({
+      await this.notificationRepo.create({
         recipientId: recipientId ?? null,
         recipientRole,
         type,
@@ -82,36 +81,27 @@ export class NotificationsService {
         return {
           recipientId: ownerId ?? null,
           recipientRole: 'owner',
-          message: `Notification: ${type}`,
+          message: `Notification: ${type as string}`,
         };
     }
   }
 
-  async findForOwner(ownerId: string): Promise<Notification[]> {
-    return this.notificationModel
-      .find({ recipientRole: 'owner', recipientId: ownerId })
-      .sort({ createdAt: -1 })
-      .exec();
+  async findForOwner(ownerId: string): Promise<NotificationResponseDto[]> {
+    const notifications = await this.notificationRepo.findForOwner(ownerId);
+    return notifications.map((n) => this.toResponse(n));
   }
 
-  async findForBackoffice(): Promise<Notification[]> {
-    return this.notificationModel
-      .find({ recipientRole: 'backoffice_employee' })
-      .sort({ createdAt: -1 })
-      .exec();
+  async findForBackoffice(): Promise<NotificationResponseDto[]> {
+    const notifications = await this.notificationRepo.findForBackoffice();
+    return notifications.map((n) => this.toResponse(n));
   }
 
   async markAsRead(
     notificationId: string,
     userId: string,
     callerRoles: string[],
-  ): Promise<{ id: string; isRead: boolean } | 'FORBIDDEN' | null> {
-    if (!Types.ObjectId.isValid(notificationId)) {
-      return null;
-    }
-    const notification = await this.notificationModel
-      .findById(notificationId)
-      .exec();
+  ): Promise<MarkReadResponseDto | 'FORBIDDEN' | null> {
+    const notification = await this.notificationRepo.findById(notificationId);
     if (!notification) return null;
 
     const isBackoffice = callerRoles.includes('backoffice_employee');
@@ -124,7 +114,15 @@ export class NotificationsService {
     }
 
     notification.isRead = true;
-    const saved = await notification.save();
+    const saved = await this.notificationRepo.save(notification);
     return { id: saved.id, isRead: true };
+  }
+
+  private toResponse(notification: Notification): NotificationResponseDto {
+    const json = notification.toJSON();
+    return {
+      ...json,
+      relatedRequestId: json.relatedRequestId?.toString(),
+    } as NotificationResponseDto;
   }
 }

@@ -13,20 +13,20 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FilesInterceptor, FileInterceptor } from '@nestjs/platform-express';
-import { plainToInstance } from 'class-transformer';
-import { validate } from 'class-validator';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { JwtUser } from '../auth/current-user.decorator';
 import { SettlementRequestsService } from './settlement-requests.service';
-import { CreateSettlementRequestDto } from './dto/create-settlement-request.dto';
-import { SetFeeDto } from './dto/set-fee.dto';
-import { RejectRequestDto } from './dto/reject-request.dto';
-import { ListSettlementRequestsQueryDto } from './dto/list-settlement-requests.query.dto';
-
-const ALLOWED_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
-const MAX_UPLOAD_SIZE_MB = Number(process.env.MAX_UPLOAD_SIZE_MB) || 10;
-const MAX_FILE_SIZE = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
+import { ParseJsonPayloadPipe } from '../common/pipes/parse-json-payload.pipe';
+import { CreateSettlementRequestDto } from './dto/input/create-settlement-request.dto';
+import { SetFeeDto } from './dto/input/set-fee.dto';
+import { RejectRequestDto } from './dto/input/reject-request.dto';
+import { ListSettlementRequestsQueryDto } from './dto/input/list-settlement-requests.query.dto';
+import {
+  ALLOWED_MIME_TYPES,
+  MAX_FILE_SIZE,
+  MAX_UPLOAD_SIZE_MB,
+} from '../common/constants';
 
 function validateFile(file: Express.Multer.File) {
   if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
@@ -55,23 +55,11 @@ export class SettlementRequestsController {
     }),
   )
   async create(
-    @Body('payload') payloadRaw: string,
+    @Body('payload', new ParseJsonPayloadPipe(CreateSettlementRequestDto))
+    dto: CreateSettlementRequestDto,
     @UploadedFiles() attachments: Express.Multer.File[],
     @CurrentUser() user: JwtUser,
   ) {
-    let dto: CreateSettlementRequestDto;
-    try {
-      const parsed = JSON.parse(payloadRaw);
-      dto = plainToInstance(CreateSettlementRequestDto, parsed);
-    } catch {
-      throw new BadRequestException('Invalid JSON payload');
-    }
-
-    const errors = await validate(dto);
-    if (errors.length > 0) {
-      throw new BadRequestException(errors);
-    }
-
     if (!attachments || attachments.length !== dto.meetings.length) {
       throw new BadRequestException(
         'One attachment is required per meeting, in the same order.',

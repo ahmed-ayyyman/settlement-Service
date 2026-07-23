@@ -13,6 +13,7 @@ import {
 } from './schemas/notification.schema';
 import { NotificationsController } from './notifications.controller';
 import { NotificationsService } from './notifications.service';
+import { NotificationRepository } from './repositories/notification.repository';
 
 describe('NotificationsController - HTTP (leak + auth)', () => {
   let app: INestApplication<App>;
@@ -42,6 +43,7 @@ describe('NotificationsController - HTTP (leak + auth)', () => {
       controllers: [NotificationsController],
       providers: [
         NotificationsService,
+        NotificationRepository,
         { provide: APP_GUARD, useValue: fakeAuthGuard },
       ],
     }).compile();

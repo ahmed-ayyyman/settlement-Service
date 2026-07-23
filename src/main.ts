@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
+import { MAX_UPLOAD_SIZE_MB } from './common/constants';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -17,10 +18,9 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api');
 
-  const maxUploadMb = Number(process.env.MAX_UPLOAD_SIZE_MB) || 10;
-  app.useBodyParser('json', { limit: `${maxUploadMb}mb` });
+  app.useBodyParser('json', { limit: `${MAX_UPLOAD_SIZE_MB}mb` });
   app.useBodyParser('urlencoded', {
-    limit: `${maxUploadMb}mb`,
+    limit: `${MAX_UPLOAD_SIZE_MB}mb`,
     extended: true,
   });
 

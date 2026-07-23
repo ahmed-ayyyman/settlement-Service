@@ -8,6 +8,7 @@ import {
 import { Roles } from '../auth/roles.decorator';
 import { CRN_ELIGIBILITY_SERVICE } from './crn-eligibility.service';
 import type { CrnEligibilityService } from './crn-eligibility.service';
+import { CrnEligibilityResponseDto } from './dto/output/crn-eligibility-response.dto';
 
 @Controller('crn')
 export class CrnController {
@@ -18,7 +19,7 @@ export class CrnController {
 
   @Get(':crn/eligibility')
   @Roles('owner')
-  checkEligibility(@Param('crn') crn: string) {
+  checkEligibility(@Param('crn') crn: string): CrnEligibilityResponseDto {
     if (
       !crn ||
       crn.length < 5 ||

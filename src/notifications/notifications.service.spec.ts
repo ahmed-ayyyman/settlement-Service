@@ -3,6 +3,7 @@ import { getModelToken } from '@nestjs/mongoose';
 import mongoose, { Model } from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { NotificationsService } from './notifications.service';
+import { NotificationRepository } from './repositories/notification.repository';
 import {
   Notification,
   NotificationSchema,
@@ -32,6 +33,7 @@ describe('NotificationsService', () => {
     module = await Test.createTestingModule({
       providers: [
         NotificationsService,
+        NotificationRepository,
         {
           provide: getModelToken(Notification.name),
           useValue: notificationModel,
