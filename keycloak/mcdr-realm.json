@@ -24,21 +24,14 @@
         "clientRole": false,
         "containerId": "mcdr"
       }
-    ],
-    "client": {
-      "realm-management": [
-        { "name": "create-user", "composite": false, "clientRole": true },
-        { "name": "manage-users", "composite": false, "clientRole": true }
-      ]
-    }
+    ]
   },
-  "defaultRoles": ["owner"],
   "clients": [
     {
       "clientId": "mcdr-api",
       "enabled": true,
       "publicClient": false,
-      "secret": "CHANGE_ME",
+      "secret": "secret",
       "serviceAccountsEnabled": true,
       "directAccessGrantsEnabled": false,
       "standardFlowEnabled": false,
@@ -56,7 +49,21 @@
       "webOrigins": ["http://localhost:5173"],
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": true,
-      "protocol": "openid-connect"
+      "protocol": "openid-connect",
+      "protocolMappers": [
+        {
+          "name": "account-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "account",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ]
     },
     {
       "clientId": "mcdr-backoffice-portal",
@@ -66,7 +73,21 @@
       "webOrigins": ["http://localhost:5174"],
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": true,
-      "protocol": "openid-connect"
+      "protocol": "openid-connect",
+      "protocolMappers": [
+        {
+          "name": "account-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "account",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ]
     }
   ],
   "users": [
@@ -119,11 +140,12 @@
       "realmRoles": ["backoffice_employee"]
     }
   ],
-  "scopeMappings": [
-    {
-      "client": "mcdr-api",
-      "roles": ["create-user", "manage-users"],
-      "clientRoles": "realm-management"
-    }
-  ]
+  "clientScopeMappings": {
+    "realm-management": [
+      {
+        "client": "mcdr-api",
+        "roles": ["create-user", "manage-users"]
+      }
+    ]
+  }
 }
