@@ -1,8 +1,16 @@
 import { Module } from '@nestjs/common';
-import { FileStorageService } from './file-storage.service';
+import {
+  FILE_STORAGE_SERVICE,
+  LocalDiskFileStorageService,
+} from './file-storage.service';
 
 @Module({
-  providers: [FileStorageService],
-  exports: [FileStorageService],
+  providers: [
+    {
+      provide: FILE_STORAGE_SERVICE,
+      useClass: LocalDiskFileStorageService,
+    },
+  ],
+  exports: [FILE_STORAGE_SERVICE],
 })
 export class FilesModule {}
