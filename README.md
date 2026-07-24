@@ -136,8 +136,9 @@ curl -X POST http://localhost:8081/realms/mcdr/protocol/openid-connect/token \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "client_id=mcdr-owner-portal&grant_type=password&username=owner1&password=test123"
 ```
-Use the returned `access_token` as `Authorization: Bearer <token>`. Tokens expire after 5 minutes
-(Keycloak default); use the refresh token or re-authenticate.
+Use the returned `access_token` as `Authorization: Bearer <token>`. Tokens expire after
+**1 day** (set via `accessTokenLifespan` in `keycloak/mcdr-realm.json` — a dev convenience;
+use the refresh token or re-authenticate).
 
 ## API reference (16 endpoints)
 

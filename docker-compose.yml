@@ -29,7 +29,10 @@ services:
     image: mongo:7
     container_name: mcdr-mongo
     ports:
-      - "27017:27017"
+      # Host 27017 is shadowed by a stray local mongod bound to 127.0.0.1:27017,
+      # so reach this container on host port 27018 (e.g. Compass -> localhost:27018).
+      # The API connects internally via `mongo:27017` and is unaffected.
+      - "27018:27017"
     volumes:
       - mongo-data:/data/db
     healthcheck:

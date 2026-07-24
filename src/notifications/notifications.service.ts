@@ -115,7 +115,7 @@ export class NotificationsService {
 
     notification.isRead = true;
     const saved = await this.notificationRepo.save(notification);
-    return { id: saved.id, isRead: true };
+    return { id: saved._id.toString(), isRead: true };
   }
 
   private toResponse(notification: Notification): NotificationResponseDto {
