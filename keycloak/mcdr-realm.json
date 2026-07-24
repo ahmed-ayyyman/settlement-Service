@@ -95,6 +95,16 @@
   ],
   "users": [
     {
+      "username": "service-account-mcdr-api",
+      "serviceAccountClientId": "mcdr-api",
+      "enabled": true,
+      "emailVerified": false,
+      "requiredActions": [],
+      "clientRoles": {
+        "realm-management": ["realm-admin"]
+      }
+    },
+    {
       "username": "owner1",
       "email": "owner1@test.com",
       "firstName": "Owner",

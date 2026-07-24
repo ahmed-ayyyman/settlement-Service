@@ -55,11 +55,18 @@ export class SettlementRequestsController {
     }),
   )
   async create(
-    @Body('payload', new ParseJsonPayloadPipe(CreateSettlementRequestDto))
-    dto: CreateSettlementRequestDto,
+    @Body() body: { payload?: string },
     @UploadedFiles() attachments: Express.Multer.File[],
     @CurrentUser() user: JwtUser,
   ) {
+    // Parse the multipart 'payload' field manually. We cannot use
+    // @Body('payload', ParseJsonPayloadPipe) + DTO-typed param here because
+    // the global ValidationPipe (transform:true) would run first and try to
+    // coerce the raw multipart string into the DTO before our pipe runs.
+    const dto = await new ParseJsonPayloadPipe(
+      CreateSettlementRequestDto,
+    ).transform(body?.payload);
+
     if (!attachments || attachments.length !== dto.meetings.length) {
       throw new BadRequestException(
         'One attachment is required per meeting, in the same order.',

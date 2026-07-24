@@ -9,7 +9,7 @@ export class ParseJsonPayloadPipe<T extends object> implements PipeTransform<
 > {
   constructor(private readonly dtoClass: ClassConstructor<T>) {}
 
-  async transform(value: string): Promise<T> {
+  async transform(value: string | undefined | null): Promise<T> {
     if (!value) {
       throw new BadRequestException('JSON payload is required');
     }
